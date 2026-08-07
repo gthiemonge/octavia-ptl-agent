@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "octavia-ptl-agent"
+version = "0.1.0"
+description = "OpenStack Octavia PTL daily briefing agent powered by Claude Agent SDK"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = [
+    "claude-agent-sdk",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = ["ruff", "mypy"]
+
+[tool.setuptools.packages.find]
+include = ["ptl_agent*"]
+
+[project.scripts]
+ptl = "ptl_agent.cli:main_cli"
