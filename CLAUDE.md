@@ -39,7 +39,10 @@ python -m ptl_agent.cli -d 3
 
 ```bash
 podman build -f Containerfile.dev -t octavia-ptl .
-podman run -v ~/.config/gcloud:/root/.config/gcloud:ro \
+podman run --userns=keep-id \
+    -v ~/.config/gcloud:/home/claude/.config/gcloud:ro \
+    -v .ptl_cache:/app/.ptl_cache \
+    -e GOOGLE_APPLICATION_CREDENTIALS=/home/claude/.config/gcloud/application_default_credentials.json \
     -e CLAUDE_CODE_USE_VERTEX -e CLOUD_ML_REGION -e ANTHROPIC_VERTEX_PROJECT_ID \
     octavia-ptl ptl -d 3
 ```

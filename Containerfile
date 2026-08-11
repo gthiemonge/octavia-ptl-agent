@@ -30,4 +30,7 @@ print('\n'.join(deps))" > /tmp/deps.txt && \
 COPY . /app
 RUN pip install --no-cache-dir .
 
+RUN useradd -m claude
+USER claude
+
 ENTRYPOINT ["ptl"]
