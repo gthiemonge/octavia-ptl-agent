@@ -25,6 +25,7 @@ from rich.table import Table
 from ptl_agent.fetch_gerrit import fetch_gerrit_data
 from ptl_agent.fetch_launchpad import fetch_launchpad_data
 from ptl_agent.fetch_schedule import fetch_schedule_data
+from ptl_agent.fetch_mailinglist import fetch_mailinglist_data
 from ptl_agent.fetch_zuul import fetch_zuul_data
 
 from claude_agent_sdk import (
@@ -178,6 +179,32 @@ OUTPUT_SCHEDULE = """\
 - Link to the full schedule
 """
 
+SOURCE_MAILINGLIST = """\
+═══ OPENSTACK-DISCUSS MAILING LIST ═══
+Mailing list data has been pre-fetched from the openstack-discuss archives.
+Read the file at: {mailinglist_data_path}
+
+The JSON file contains:
+- "summary": total threads/messages, counts by category (octavia, ptl, general)
+- "octavia_threads": threads with [octavia] tag — direct project relevance
+- "ptl_threads": threads with [ptl] tag — PTL-specific discussions
+- "general_threads": all other threads — community-wide topics
+
+Each thread has: subject, tags, categories, message_count, participants, first_date, last_date.
+
+Focus on octavia and ptl threads first. For general threads, highlight
+security advisories (OSSA/OSSN), release announcements, governance topics,
+and anything that may affect Octavia or require PTL action.
+Do NOT re-fetch this data with WebFetch — it is already on disk.
+"""
+
+OUTPUT_MAILINGLIST = """\
+## Mailing List (openstack-discuss)
+- Octavia-specific threads and key points
+- PTL-tagged discussions requiring attention
+- Notable community-wide threads (security, releases, governance)
+"""
+
 OUTPUT_FOOTER = """\
 ## Action Items
 - Bullet list of concrete things the PTL should do today, derived from the data above
@@ -193,6 +220,7 @@ ALL_SOURCES = {
     "launchpad": (SOURCE_LAUNCHPAD, OUTPUT_LAUNCHPAD),
     "irc": (SOURCE_IRC, OUTPUT_IRC),
     "schedule": (SOURCE_SCHEDULE, OUTPUT_SCHEDULE),
+    "mailinglist": (SOURCE_MAILINGLIST, OUTPUT_MAILINGLIST),
 }
 
 
@@ -311,6 +339,9 @@ def build_system_prompt(days: int, sources: list[str], verbose: bool = False) ->
             sched_data = json.loads(sched_path.read_text())
             release_name = sched_data.get("release_name", "unknown")
             src = src_template.format(schedule_data_path=sched_path.resolve(), **fmt)
+        elif name == "mailinglist":
+            ml_path = fetch_mailinglist_data(days, CACHE_DIR, verbose=verbose)
+            src = src_template.format(mailinglist_data_path=ml_path.resolve(), **fmt)
         else:
             src = src_template.format(**fmt)
 

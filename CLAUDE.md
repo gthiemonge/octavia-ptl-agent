@@ -65,6 +65,7 @@ This design minimizes token usage — raw API responses are large and verbose; t
 | `ptl_agent/fetch_zuul.py` | Zuul CI (zuul.opendev.org) | Fetches CI failures, summarizes by job and project, flags gate failures |
 | `ptl_agent/fetch_launchpad.py` | Launchpad (api.launchpad.net) | Fetches open bugs, groups by status/importance |
 | `ptl_agent/fetch_schedule.py` | Release schedule (releases.openstack.org) | Scrapes current cycle milestones, computes countdown to deadlines |
+| `ptl_agent/fetch_mailinglist.py` | openstack-discuss (lists.openstack.org) | Fetches mbox archive, groups threads by category: octavia, ptl-tagged, general |
 
 IRC logs are cached differently: past days (immutable) are fetched and stored in `.ptl_cache/`, today's log is fetched live by the agent via `WebFetch`.
 
