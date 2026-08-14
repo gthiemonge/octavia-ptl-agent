@@ -25,6 +25,9 @@ ptl
 # Specific sources, 7-day window, verbose
 ptl -s gerrit zuul schedule -d 7 -v
 
+# Personal Gerrit activity (patches, reviews, comments)
+ptl -u gthiemon -d 7
+
 # Choose model
 ptl -m claude-sonnet-5
 
@@ -66,6 +69,7 @@ This design minimizes token usage — raw API responses are large and verbose; t
 | `ptl_agent/fetch_launchpad.py` | Launchpad (api.launchpad.net) | Fetches open bugs, groups by status/importance |
 | `ptl_agent/fetch_schedule.py` | Release schedule (releases.openstack.org) | Scrapes current cycle milestones, computes countdown to deadlines |
 | `ptl_agent/fetch_mailinglist.py` | openstack-discuss (lists.openstack.org) | Fetches mbox archive, groups threads by category: octavia, ptl-tagged, general |
+| `ptl_agent/fetch_gerrit_activity.py` | Gerrit (review.opendev.org) | Fetches personal activity: patches authored, reviews given, comments posted |
 
 IRC logs are cached differently: past days (immutable) are fetched and stored in `.ptl_cache/`, today's log is fetched live by the agent via `WebFetch`.
 

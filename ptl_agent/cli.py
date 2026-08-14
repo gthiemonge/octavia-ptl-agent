@@ -23,6 +23,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ptl_agent.fetch_gerrit import fetch_gerrit_data
+from ptl_agent.fetch_gerrit_activity import fetch_gerrit_activity_data
 from ptl_agent.fetch_launchpad import fetch_launchpad_data
 from ptl_agent.fetch_schedule import fetch_schedule_data
 from ptl_agent.fetch_mailinglist import fetch_mailinglist_data
@@ -205,6 +206,28 @@ OUTPUT_MAILINGLIST = """\
 - Notable community-wide threads (security, releases, governance)
 """
 
+SOURCE_ACTIVITY = """\
+═══ YOUR GERRIT ACTIVITY ═══
+Personal Gerrit activity data has been pre-fetched for user "{user}".
+Read the file at: {activity_data_path}
+
+The JSON file contains:
+- "summary": patches_count, reviews_count, comments_count
+- "patches": changes authored by {user} in the last {days} day(s)
+- "reviews": changes reviewed by {user} (excluding self-owned)
+- "comments": changes commented on by {user} (excluding self-owned and already in reviews)
+
+Each change has the same fields as in the Gerrit reviews data.
+Do NOT re-fetch this data with WebFetch — it is already on disk.
+"""
+
+OUTPUT_ACTIVITY = """\
+## Your Activity ({user})
+- Patches submitted (with current review state)
+- Reviews given on others' changes
+- Comments posted
+"""
+
 OUTPUT_FOOTER = """\
 ## Action Items
 - Bullet list of concrete things the PTL should do today, derived from the data above
@@ -221,6 +244,7 @@ ALL_SOURCES = {
     "irc": (SOURCE_IRC, OUTPUT_IRC),
     "schedule": (SOURCE_SCHEDULE, OUTPUT_SCHEDULE),
     "mailinglist": (SOURCE_MAILINGLIST, OUTPUT_MAILINGLIST),
+    "activity": (SOURCE_ACTIVITY, OUTPUT_ACTIVITY),
 }
 
 
@@ -308,9 +332,10 @@ def prefetch_irc_logs(days: int, verbose: bool = False) -> str:
 # System prompt
 # ---------------------------------------------------------------------------
 
-def build_system_prompt(days: int, sources: list[str], verbose: bool = False) -> str:
+def build_system_prompt(days: int, sources: list[str], user: str | None = None,
+                        verbose: bool = False) -> str:
     today = datetime.date.today().isoformat()
-    fmt = dict(days=days, today=today)
+    fmt = dict(days=days, today=today, user=user or "")
 
     parts = [SYSTEM_PROMPT_HEADER.format(**fmt)]
     output_parts = [f"\n═══ OUTPUT FORMAT ═══\n\n# Octavia PTL Daily Briefing — {today}\n"]
@@ -342,6 +367,13 @@ def build_system_prompt(days: int, sources: list[str], verbose: bool = False) ->
         elif name == "mailinglist":
             ml_path = fetch_mailinglist_data(days, CACHE_DIR, verbose=verbose)
             src = src_template.format(mailinglist_data_path=ml_path.resolve(), **fmt)
+        elif name == "activity":
+            if not user:
+                if verbose:
+                    print("  [activity] Skipped — no --user provided")
+                continue
+            act_path = fetch_gerrit_activity_data(user, days, CACHE_DIR, verbose=verbose)
+            src = src_template.format(activity_data_path=act_path.resolve(), **fmt)
         else:
             src = src_template.format(**fmt)
 
@@ -379,6 +411,10 @@ def parse_args():
         "--sources", "-s", nargs="+",
         choices=list(ALL_SOURCES.keys()), default=list(ALL_SOURCES.keys()),
         help="Sources to include (default: all). Choices: gerrit, zuul, launchpad, irc",
+    )
+    parser.add_argument(
+        "--user", "-u", default=None,
+        help="Gerrit username for personal activity tracking (patches, reviews, comments)",
     )
     parser.add_argument(
         "--output", "-o", default=None,
@@ -469,7 +505,8 @@ async def run_briefing(args):
     if args.verbose:
         print_env_check(console)
 
-    system_prompt = build_system_prompt(args.days, args.sources, verbose=args.verbose)
+    system_prompt = build_system_prompt(args.days, args.sources, user=args.user,
+                                           verbose=args.verbose)
 
     user_prompt = "Generate my Octavia PTL daily briefing."
     if args.prompt:
