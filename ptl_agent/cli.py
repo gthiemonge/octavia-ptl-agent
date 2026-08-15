@@ -169,6 +169,10 @@ The JSON file contains:
 - "reminders.past": recent past events
 - "reminders.future": events more than 30 days away
 
+IMPORTANT: Deadlines are generally the Thursday of the week on which they
+are noted. The dates in the schedule mark the week, not the exact day.
+When computing countdowns, use the Thursday of that week as the actual deadline.
+
 Focus on upcoming events. For each, note how many days away it is.
 If feature freeze is approaching, cross-reference with the Gerrit reviews:
 highlight patches that implement new features and need to merge before the freeze.
