@@ -59,6 +59,7 @@ covering the last {days} day(s). Today is {today}.
 
 Most data has been pre-fetched into local JSON files — use the Read tool to load them.
 Use WebFetch only when explicitly told to (e.g. today's IRC log).
+{context}
 Prefer reading and analyzing the pre-fetched data over making new API calls.
 """
 
@@ -357,11 +358,14 @@ def prefetch_irc_logs(days: int, verbose: bool = False) -> str:
 # ---------------------------------------------------------------------------
 
 def build_system_prompt(days: int, sources: list[str],
+                        context: str | None = None,
                         gerrit_user: str | None = None,
                         lp_user: str | None = None,
                         verbose: bool = False) -> str:
     today = datetime.date.today().isoformat()
-    fmt = dict(days=days, today=today, user=gerrit_user or "", lp_user=lp_user or "")
+    context_block = f"\nAdditional context: {context}\n" if context else ""
+    fmt = dict(days=days, today=today, user=gerrit_user or "", lp_user=lp_user or "",
+               context=context_block)
 
     parts = [SYSTEM_PROMPT_HEADER.format(**fmt)]
     output_parts = [f"\n═══ OUTPUT FORMAT ═══\n\n# Octavia PTL Daily Briefing — {today}\n"]
@@ -444,6 +448,10 @@ def parse_args():
         "--sources", "-s", nargs="+",
         choices=list(ALL_SOURCES.keys()), default=list(ALL_SOURCES.keys()),
         help="Sources to include (default: all). Choices: gerrit, zuul, launchpad, irc",
+    )
+    parser.add_argument(
+        "--context", "-c", default=None,
+        help="Additional context for the briefing (e.g. 'The PTL is Gregory Thiemonge')",
     )
     parser.add_argument(
         "--gerrit-user", default=None,
@@ -543,6 +551,7 @@ async def run_briefing(args):
         print_env_check(console)
 
     system_prompt = build_system_prompt(args.days, args.sources,
+                                           context=args.context,
                                            gerrit_user=args.gerrit_user,
                                            lp_user=args.lp_user,
                                            verbose=args.verbose)
