@@ -261,6 +261,10 @@ OUTPUT_FOOTER = """\
 - Bullet list of concrete things the PTL should do today, derived from the data above
 
 Keep the tone professional but concise. Use markdown formatting.
+When mentioning a bug ID or a Gerrit change, always render it as a full
+markdown link (e.g. [Bug #1234567](https://bugs.launchpad.net/octavia/+bug/1234567),
+[Change 12345](https://review.opendev.org/c/openstack/octavia/+/12345)).
+Use the url or web_link fields from the pre-fetched data.
 If a fetch fails, note the failure and continue with the other sources.
 Do NOT fabricate data. If a source returns empty results, say so.
 """
