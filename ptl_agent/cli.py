@@ -63,6 +63,27 @@ Use WebFetch only when explicitly told to (e.g. today's IRC log).
 Prefer reading and analyzing the pre-fetched data over making new API calls.
 """
 
+FREEFORM_SYSTEM_PROMPT = """\
+You are an assistant for the OpenStack Octavia PTL (Project Team Lead).
+Today is {today}.
+{context}
+You have deep knowledge of the OpenStack Octavia project and its ecosystem.
+You can help with any question or task related to:
+
+- **Gerrit reviews**: open changes, review states, CI results for the Octavia team
+  projects ({projects}). Gerrit API: https://review.opendev.org/changes/
+- **Zuul CI**: build failures, job results. Zuul API: https://zuul.opendev.org/api/
+- **Launchpad bugs**: bug tracking for Octavia. API: https://api.launchpad.net/devel/octavia
+- **Release schedule**: milestones, deadlines for the current cycle.
+  Schedule: https://releases.openstack.org/
+- **Mailing list**: openstack-discuss archives. https://lists.openstack.org/archives/list/openstack-discuss@lists.openstack.org/
+- **IRC/Matrix logs**: #{channel} channel. https://meetings.opendev.org/irclogs/%23{channel}/
+
+Use WebFetch, WebSearch, Bash, and Read tools as needed to answer the user's question.
+Use markdown formatting. When mentioning bug IDs or Gerrit changes, render them as
+full markdown links.
+"""
+
 SOURCE_GERRIT = """\
 ═══ GERRIT OPEN REVIEWS ═══
 Gerrit review data has been pre-fetched and filtered for all Octavia team projects.
@@ -440,8 +461,12 @@ def parse_args():
         description="Octavia PTL daily briefing agent."
     )
     parser.add_argument(
-        "prompt", nargs="*", default=None,
+        "extra", nargs="*", default=None,
         help="Optional follow-up question to append to the briefing request",
+    )
+    parser.add_argument(
+        "--prompt", "-p", default=None,
+        help="Free-form prompt (disables all sources, uses the prompt as the task)",
     )
     parser.add_argument("--model", "-m", default="claude-sonnet-4-6", help="Model ID (default: claude-sonnet-4-6)")
     parser.add_argument(
@@ -558,15 +583,24 @@ async def run_briefing(args):
     if args.verbose:
         print_env_check(console)
 
-    system_prompt = build_system_prompt(args.days, args.sources,
-                                           context=args.context,
-                                           gerrit_user=args.gerrit_user,
-                                           lp_user=args.lp_user,
-                                           verbose=args.verbose)
-
-    user_prompt = "Generate my Octavia PTL daily briefing."
     if args.prompt:
-        user_prompt += f" Also: {' '.join(args.prompt)}"
+        context_block = f"\nAdditional context: {args.context}\n" if args.context else ""
+        system_prompt = FREEFORM_SYSTEM_PROMPT.format(
+            today=datetime.date.today().isoformat(),
+            context=context_block,
+            projects=", ".join(OCTAVIA_PROJECTS),
+            channel=IRC_CHANNEL,
+        )
+        user_prompt = args.prompt
+    else:
+        system_prompt = build_system_prompt(args.days, args.sources,
+                                               context=args.context,
+                                               gerrit_user=args.gerrit_user,
+                                               lp_user=args.lp_user,
+                                               verbose=args.verbose)
+        user_prompt = "Generate my Octavia PTL daily briefing."
+        if args.extra:
+            user_prompt += f" Also: {' '.join(args.extra)}"
 
     options = ClaudeAgentOptions(
         model=args.model,
