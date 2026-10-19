@@ -3,7 +3,7 @@
 
 """Octavia PTL Daily Briefing Agent.
 
-Uses the Claude Agent SDK to fetch and summarize OpenStack Octavia
+Uses the Claude Agent SDK (or the OpenAI Responses API) to fetch and summarize OpenStack Octavia
 community activity from Gerrit, Zuul CI, Launchpad, and IRC logs.
 """
 
@@ -18,7 +18,6 @@ import urllib.request
 from pathlib import Path
 
 from rich.console import Console
-from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
@@ -30,15 +29,8 @@ from ptl_agent.fetch_schedule import fetch_schedule_data
 from ptl_agent.fetch_mailinglist import fetch_mailinglist_data
 from ptl_agent.fetch_zuul import fetch_zuul_data
 
-from claude_agent_sdk import (
-    query,
-    ClaudeAgentOptions,
-    AssistantMessage,
-    ResultMessage,
-    TextBlock,
-    ThinkingBlock,
-    ToolUseBlock,
-)
+from ptl_agent.config import get_model_config, list_presets
+from ptl_agent.providers import AgentResult, get_provider
 
 CACHE_DIR = Path(".ptl_cache")
 IRC_CHANNEL = "openstack-lbaas"
@@ -468,14 +460,48 @@ def parse_args():
         "--prompt", "-p", default=None,
         help="Free-form prompt (disables all sources, uses the prompt as the task)",
     )
-    parser.add_argument("--model", "-m", default="claude-sonnet-4-6", help="Model ID (default: claude-sonnet-4-6)")
+    parser.add_argument(
+        "--provider", choices=["claude", "openai"],
+        help="AI provider to use (claude/openai). "
+        "Override with AGENT_PROVIDER environment variable. Default: claude.",
+    )
+    parser.add_argument(
+        "--openai-base-url", default=None,
+        help="Custom OpenAI-compatible endpoint (Azure / proxy / self-hosted). "
+        "Override with OPENAI_BASE_URL environment variable. "
+        "Only used with --provider openai.",
+    )
+    parser.add_argument(
+        "--preset", default=None,
+        help="Model preset (quick/standard/thorough). "
+        "Override with AGENT_PRESET environment variable.",
+    )
+    parser.add_argument(
+        "--model", "-m", default=None,
+        help="Specific model to use (overrides preset). "
+        "Override with AGENT_MODEL environment variable.",
+    )
+    parser.add_argument(
+        "--openai-price-input", type=float, default=None,
+        help="OpenAI input price in USD per 1M tokens (overrides the pricing "
+        "table). Override with OPENAI_PRICE_INPUT env var.",
+    )
+    parser.add_argument(
+        "--openai-price-output", type=float, default=None,
+        help="OpenAI output price in USD per 1M tokens (overrides the pricing "
+        "table). Override with OPENAI_PRICE_OUTPUT env var.",
+    )
+    parser.add_argument(
+        "--list-presets", action="store_true",
+        help="List available presets and exit",
+    )
     parser.add_argument(
         "--days", "-d", type=int, default=1,
         help="How many days back to look (default: 1)",
     )
     parser.add_argument(
-        "--max-turns", "-t", type=int, default=15,
-        help="Max agentic turns (default: 15)",
+        "--max-turns", "-t", type=int, default=None,
+        help="Max agentic turns (overrides the preset/model default, usually 15)",
     )
     parser.add_argument(
         "--sources", "-s", nargs="+",
@@ -502,22 +528,27 @@ def parse_args():
         "--verbose", "-v", action="store_true",
         help="Show tool calls and thinking",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.list_presets:
+        print(list_presets())
+        raise SystemExit(0)
+    return args
 
 
 # ---------------------------------------------------------------------------
 # Agent runner
 # ---------------------------------------------------------------------------
 
-def print_stats(console: Console, message: ResultMessage, elapsed: float, verbose: bool):
-    cost = getattr(message, "total_cost_usd", None)
-    usage = getattr(message, "usage", {})
-    model_usage = getattr(message, "model_usage", {})
+def print_stats(console: Console, message: AgentResult, elapsed: float, verbose: bool):
+    cost = message.total_cost_usd
+    usage = message.usage or {}
+    model_usage = message.model_usage or {}
 
     table = Table(show_header=False, box=None, padding=(0, 1))
     table.add_column(style="bold")
     table.add_column()
 
+    table.add_row("Provider", message.provider)
     table.add_row("Status", message.subtype)
     table.add_row("Wall time", f"{elapsed:.1f}s")
 
@@ -547,10 +578,13 @@ def print_stats(console: Console, message: ResultMessage, elapsed: float, verbos
                 f"{m_in:,} in ({m_cache_read:,} cache read) / {m_out:,} out{cost_str}",
             )
 
+    for note in message.notes:
+        table.add_row("Note", note)
+
     console.print(Panel(table, title="Agent Stats", border_style="blue"))
 
 
-SDK_ENV_VARS = [
+ENV_VARS = [
     "ANTHROPIC_API_KEY",
     "CLAUDE_CODE_USE_VERTEX",
     "CLOUD_ML_REGION",
@@ -558,14 +592,20 @@ SDK_ENV_VARS = [
     "GOOGLE_APPLICATION_CREDENTIALS",
     "ANTHROPIC_MODEL",
     "CLAUDE_CODE_MAX_MODEL",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "OPENAI_ORG",
+    "AGENT_PROVIDER",
+    "AGENT_PRESET",
+    "AGENT_MODEL",
 ]
 
 
 def print_env_check(console: Console):
-    table = Table(title="SDK Environment", show_header=True, border_style="dim")
+    table = Table(title="Environment", show_header=True, border_style="dim")
     table.add_column("Variable", style="bold")
     table.add_column("Value")
-    for var in SDK_ENV_VARS:
+    for var in ENV_VARS:
         val = os.environ.get(var)
         if val is None:
             table.add_row(var, "[dim]not set[/dim]")
@@ -602,32 +642,33 @@ async def run_briefing(args):
         if args.extra:
             user_prompt += f" Also: {' '.join(args.extra)}"
 
-    options = ClaudeAgentOptions(
-        model=args.model,
-        system_prompt=system_prompt,
-        allowed_tools=["WebFetch", "WebSearch", "Bash", "Read"],
-        max_turns=args.max_turns,
+    model_config = get_model_config(
+        provider=args.provider, preset=args.preset, model_override=args.model
+    )
+    max_turns = args.max_turns or model_config["max_turns"]
+    console.print(
+        f"Using provider: {model_config['provider']}, model: "
+        f"{model_config['model']} ({model_config['source']})"
+    )
+
+    provider = get_provider(
+        model_config["provider"],
+        openai_base_url=args.openai_base_url,
+        openai_price_input=args.openai_price_input,
+        openai_price_output=args.openai_price_output,
     )
 
     start = time.monotonic()
-    briefing_parts: list[str] = []
-
-    async for message in query(prompt=user_prompt, options=options):
-        if isinstance(message, AssistantMessage):
-            for block in message.content:
-                if isinstance(block, TextBlock):
-                    briefing_parts.append(block.text)
-                    console.print(Markdown(block.text))
-                elif isinstance(block, ThinkingBlock) and args.verbose:
-                    console.print(
-                        Panel(block.thinking, title="Thinking", border_style="yellow", expand=False)
-                    )
-                elif isinstance(block, ToolUseBlock) and args.verbose:
-                    console.print(f"  [dim]> {block.name}({block.input})[/dim]")
-
-        elif isinstance(message, ResultMessage):
-            elapsed = time.monotonic() - start
-            print_stats(console, message, elapsed, args.verbose)
+    result = await provider.run(
+        model=model_config["model"],
+        max_turns=max_turns,
+        system_prompt=system_prompt,
+        prompt=user_prompt,
+        console=console,
+        verbose=args.verbose,
+    )
+    print_stats(console, result, time.monotonic() - start, args.verbose)
+    briefing_parts = result.text_parts
 
     briefing_text = "\n".join(briefing_parts)
 

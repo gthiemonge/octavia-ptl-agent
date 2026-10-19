@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "octavia-ptl-agent"
 version = "0.1.0"
-description = "OpenStack Octavia PTL daily briefing agent powered by Claude Agent SDK"
+description = "OpenStack Octavia PTL daily briefing agent powered by Claude or OpenAI"
 requires-python = ">=3.10"
 license = "MIT"
 dependencies = [
@@ -14,6 +14,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Install only the provider you need, e.g. pip install .[openai]
+claude = ["claude-agent-sdk"]
+openai = ["openai"]
 dev = ["ruff", "mypy"]
 
 [tool.setuptools.packages.find]

@@ -38,6 +38,31 @@ The agent needs credentials for the Claude API. Either:
 - **Anthropic API**: `export ANTHROPIC_API_KEY="sk-ant-..."`
 - **Vertex AI**: set `CLAUDE_CODE_USE_VERTEX`, `CLOUD_ML_REGION`, `ANTHROPIC_VERTEX_PROJECT_ID`, and configure gcloud ADC (`gcloud auth application-default login`)
 
+### Choosing an AI provider (Claude or OpenAI)
+
+`claude` (Claude Agent SDK) is the default; `openai` (OpenAI Responses API) is opt-in:
+
+```bash
+pip install .[openai]
+export OPENAI_API_KEY=...
+ptl --provider openai                      # or AGENT_PROVIDER=openai
+ptl --provider openai --preset thorough    # or --model gpt-5
+ptl --provider openai --openai-base-url https://your-endpoint/v1
+ptl --list-presets
+```
+
+| Env var | Flag | Purpose |
+|---------|------|---------|
+| `AGENT_PROVIDER` | `--provider` | `claude` (default) or `openai` |
+| `AGENT_PRESET` | `--preset` | `quick` / `standard` / `thorough` |
+| `AGENT_MODEL` | `--model` / `-m` | Explicit model (overrides preset) |
+| `OPENAI_API_KEY` | | OpenAI credentials |
+| `OPENAI_BASE_URL` | `--openai-base-url` | Custom OpenAI-compatible endpoint |
+| `OPENAI_ORG` | | OpenAI organization |
+| `OPENAI_PRICE_INPUT` / `OPENAI_PRICE_OUTPUT` | `--openai-price-input` / `--openai-price-output` | USD per 1M tokens, for cost reporting |
+
+Presets live in `ptl_agent/config.py`; adjust them to the models on your account.
+
 ## Usage
 
 ```bash
@@ -66,7 +91,9 @@ ptl "also check if there are any stable branch backports pending"
 | Flag | Default | Description |
 |------|---------|-------------|
 | `prompt` (positional) | generate briefing | Optional follow-up question |
-| `--model` / `-m` | `claude-sonnet-4-6` | Model ID |
+| `--model` / `-m` | preset model (`claude-sonnet-4-6`) | Model ID |
+| `--provider` | `claude` | `claude` or `openai` |
+| `--preset` | `standard` | Model preset |
 | `--days` / `-d` | `1` | Days to look back |
 | `--sources` / `-s` | all | Sources to include: `gerrit`, `zuul`, `launchpad`, `irc`, `schedule` |
 | `--max-turns` / `-t` | `15` | Max agent turns |

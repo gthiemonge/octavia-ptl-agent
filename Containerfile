@@ -22,13 +22,14 @@ COPY pyproject.toml /app/
 RUN python3 -c "\
 import tomllib, pathlib; \
 cfg = tomllib.loads(pathlib.Path('pyproject.toml').read_text()); \
-deps = cfg.get('project', {}).get('dependencies', []); \
+proj = cfg.get('project', {}); \
+deps = proj.get('dependencies', []) + proj.get('optional-dependencies', {}).get('openai', []); \
 print('\n'.join(deps))" > /tmp/deps.txt && \
     pip install --no-cache-dir -r /tmp/deps.txt && \
     rm /tmp/deps.txt
 
 COPY . /app
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[openai]"
 
 RUN useradd -m claude
 USER claude

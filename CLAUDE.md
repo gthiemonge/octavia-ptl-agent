@@ -38,6 +38,10 @@ ptl -d 7 -o briefing.md
 python -m ptl_agent.cli -d 3
 ```
 
+## Providers
+
+`ptl_agent/providers/` mirrors the openstack-review skill: `claude` (Claude Agent SDK, default) and `openai` (hand-written Responses API loop using local `Read`/`Bash`/`WebFetch` tools in `providers/tools.py`). Presets/model resolution are in `ptl_agent/config.py`. Env vars: `AGENT_PROVIDER`, `AGENT_PRESET`, `AGENT_MODEL`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_ORG`, `OPENAI_PRICE_INPUT/OUTPUT`. Flags: `--provider`, `--preset`, `--model`, `--openai-base-url`, `--openai-price-input/output`, `--list-presets`. Install the OpenAI extra with `pip install .[openai]`.
+
 ## Container
 
 ```bash
