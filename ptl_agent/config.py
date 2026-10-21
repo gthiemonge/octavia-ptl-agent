@@ -10,6 +10,7 @@ Environment variable overrides (same as the openstack-review skill):
     AGENT_PROVIDER=openai ptl
     AGENT_PRESET=thorough ptl
     AGENT_MODEL=gpt-5 ptl
+    AGENT_EFFORT=high ptl
 """
 
 import os
@@ -69,6 +70,13 @@ OPENAI_PRICING = {
     "gpt-5-mini": {"input": 0.25, "output": 2.00},
 }
 
+EFFORT_LEVELS = {
+    # Effort support is model-dependent. Claude's SDK exposes these levels;
+    # OpenAI models can additionally support "none" and "minimal".
+    "claude": ("low", "medium", "high", "xhigh", "max"),
+    "openai": ("none", "minimal", "low", "medium", "high", "xhigh", "max"),
+}
+
 
 def get_openai_pricing(model: str) -> dict | None:
     """Return {'input', 'output'} USD-per-1M-token rates for a model, or None."""
@@ -86,20 +94,24 @@ def _resolve_provider(provider: str | None = None) -> str:
 
 
 def get_model_config(provider: str | None = None, preset: str | None = None,
-                     model_override: str | None = None) -> dict[str, Any]:
-    """Resolve provider, model and default max_turns.
+                     model_override: str | None = None,
+                     effort_override: str | None = None) -> dict[str, Any]:
+    """Resolve provider, model, effort and default max_turns.
 
     Model priority: --model > AGENT_MODEL > --preset > AGENT_PRESET > default.
-    Returns a dict with 'provider', 'model', 'max_turns' and 'source'.
+    Effort priority: --effort > AGENT_EFFORT > the model's default.
+    Returns a dict with 'provider', 'model', 'effort', 'max_turns' and 'source'.
     """
     provider_name = _resolve_provider(provider)
     provider_presets = PRESETS[provider_name]
+    effort = _resolve_effort(provider_name, effort_override)
 
     model = model_override or os.getenv("AGENT_MODEL")
     if model:
         source = f"--model {model}" if model_override else f"AGENT_MODEL={model}"
         return {"provider": provider_name, "model": model,
-                "max_turns": DEFAULT_MAX_TURNS, "source": source}
+                "effort": effort, "max_turns": DEFAULT_MAX_TURNS,
+                "source": source}
 
     preset_name = preset or os.getenv("AGENT_PRESET") or DEFAULT_PRESET
     if preset_name not in provider_presets:
@@ -110,8 +122,27 @@ def get_model_config(provider: str | None = None, preset: str | None = None,
 
     config = provider_presets[preset_name].copy()
     config["provider"] = provider_name
+    config["effort"] = effort
     config["source"] = f"preset '{preset_name}' (provider '{provider_name}')"
     return config
+
+
+def _resolve_effort(provider: str, effort_override: str | None) -> str | None:
+    """Resolve and validate an optional provider-level effort setting."""
+    raw_effort = effort_override
+    if raw_effort is None:
+        raw_effort = os.getenv("AGENT_EFFORT")
+    if raw_effort is None or not raw_effort.strip():
+        return None
+
+    effort = raw_effort.strip().lower()
+    if effort not in EFFORT_LEVELS[provider]:
+        available = ", ".join(EFFORT_LEVELS[provider])
+        raise ValueError(
+            f"Unknown effort '{raw_effort}' for provider '{provider}'. "
+            f"Available: {available}"
+        )
+    return effort
 
 
 def list_presets() -> str:

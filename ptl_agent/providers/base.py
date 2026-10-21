@@ -40,7 +40,9 @@ class AgentProvider(ABC):
     name: str = "base"
 
     @abstractmethod
-    async def run(self, *, model: str, max_turns: int, system_prompt: str,
+    async def run(self, *, model: str, effort: str | None = None,
+                  max_turns: int,
+                  system_prompt: str,
                   prompt: str, console: Console, verbose: bool) -> AgentResult:
         """Run the agent end-to-end, printing output to the console."""
         raise NotImplementedError

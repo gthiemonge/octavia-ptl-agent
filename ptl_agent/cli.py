@@ -482,6 +482,13 @@ def parse_args():
         "Override with AGENT_MODEL environment variable.",
     )
     parser.add_argument(
+        "--effort",
+        choices=["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+        default=None,
+        help="Model reasoning effort (supported values depend on provider/model). "
+        "Override with AGENT_EFFORT; unset uses the model default.",
+    )
+    parser.add_argument(
         "--openai-price-input", type=float, default=None,
         help="OpenAI input price in USD per 1M tokens (overrides the pricing "
         "table). Override with OPENAI_PRICE_INPUT env var.",
@@ -598,6 +605,7 @@ ENV_VARS = [
     "AGENT_PROVIDER",
     "AGENT_PRESET",
     "AGENT_MODEL",
+    "AGENT_EFFORT",
 ]
 
 
@@ -643,12 +651,14 @@ async def run_briefing(args):
             user_prompt += f" Also: {' '.join(args.extra)}"
 
     model_config = get_model_config(
-        provider=args.provider, preset=args.preset, model_override=args.model
+        provider=args.provider, preset=args.preset, model_override=args.model,
+        effort_override=args.effort,
     )
     max_turns = args.max_turns or model_config["max_turns"]
     console.print(
         f"Using provider: {model_config['provider']}, model: "
-        f"{model_config['model']} ({model_config['source']})"
+        f"{model_config['model']} ({model_config['source']}), "
+        f"effort: {model_config['effort'] or 'model default'}"
     )
 
     provider = get_provider(
@@ -661,6 +671,7 @@ async def run_briefing(args):
     start = time.monotonic()
     result = await provider.run(
         model=model_config["model"],
+        effort=model_config["effort"],
         max_turns=max_turns,
         system_prompt=system_prompt,
         prompt=user_prompt,

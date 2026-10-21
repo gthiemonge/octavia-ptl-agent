@@ -7,6 +7,8 @@ Vertex AI is auto-detected by the SDK from CLAUDE_CODE_USE_VERTEX,
 ANTHROPIC_VERTEX_PROJECT_ID and CLOUD_ML_REGION.
 """
 
+from typing import Any
+
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -17,7 +19,9 @@ from .base import AgentProvider, AgentResult
 class ClaudeProvider(AgentProvider):
     name = "claude"
 
-    async def run(self, *, model: str, max_turns: int, system_prompt: str,
+    async def run(self, *, model: str, effort: str | None = None,
+                  max_turns: int,
+                  system_prompt: str,
                   prompt: str, console: Console, verbose: bool) -> AgentResult:
         try:
             from claude_agent_sdk import (
@@ -35,12 +39,15 @@ class ClaudeProvider(AgentProvider):
                 "provider. Install it with: pip install claude-agent-sdk"
             ) from e
 
-        options = ClaudeAgentOptions(
-            model=model,
-            system_prompt=system_prompt,
-            allowed_tools=["WebFetch", "WebSearch", "Bash", "Read"],
-            max_turns=max_turns,
-        )
+        option_kwargs: dict[str, Any] = {
+            "model": model,
+            "system_prompt": system_prompt,
+            "allowed_tools": ["WebFetch", "WebSearch", "Bash", "Read"],
+            "max_turns": max_turns,
+        }
+        if effort is not None:
+            option_kwargs["effort"] = effort
+        options = ClaudeAgentOptions(**option_kwargs)
 
         result = AgentResult(provider=self.name)
 

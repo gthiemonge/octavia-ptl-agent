@@ -47,6 +47,7 @@ pip install .[openai]
 export OPENAI_API_KEY=...
 ptl --provider openai                      # or AGENT_PROVIDER=openai
 ptl --provider openai --preset thorough    # or --model gpt-5
+ptl --provider openai --effort high
 ptl --provider openai --openai-base-url https://your-endpoint/v1
 ptl --list-presets
 ```
@@ -56,6 +57,7 @@ ptl --list-presets
 | `AGENT_PROVIDER` | `--provider` | `claude` (default) or `openai` |
 | `AGENT_PRESET` | `--preset` | `quick` / `standard` / `thorough` |
 | `AGENT_MODEL` | `--model` / `-m` | Explicit model (overrides preset) |
+| `AGENT_EFFORT` | `--effort` | Optional reasoning effort; accepted values depend on the provider and model. Unset uses the model default. |
 | `OPENAI_API_KEY` | | OpenAI credentials |
 | `OPENAI_BASE_URL` | `--openai-base-url` | Custom OpenAI-compatible endpoint |
 | `OPENAI_ORG` | | OpenAI organization |
@@ -79,6 +81,11 @@ ptl -s schedule launchpad
 # Choose model
 ptl -m claude-sonnet-5
 
+# Set model reasoning effort
+ptl --effort high
+# Or set it for every run
+AGENT_EFFORT=high ptl
+
 # Save briefing to a markdown file
 ptl -d 7 -o briefing.md
 
@@ -94,6 +101,7 @@ ptl "also check if there are any stable branch backports pending"
 | `--model` / `-m` | preset model (`claude-sonnet-4-6`) | Model ID |
 | `--provider` | `claude` | `claude` or `openai` |
 | `--preset` | `standard` | Model preset |
+| `--effort` | model default | Reasoning effort (`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; provider/model support varies) |
 | `--days` / `-d` | `1` | Days to look back |
 | `--sources` / `-s` | all | Sources to include: `gerrit`, `zuul`, `launchpad`, `irc`, `schedule` |
 | `--max-turns` / `-t` | `15` | Max agent turns |

@@ -9,6 +9,7 @@ via base_url: --openai-base-url -> OPENAI_BASE_URL -> official API default.
 
 import json
 import os
+from typing import Any
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -31,7 +32,9 @@ class OpenAIProvider(AgentProvider):
         self.price_input = _first_float(price_input, os.getenv("OPENAI_PRICE_INPUT"))
         self.price_output = _first_float(price_output, os.getenv("OPENAI_PRICE_OUTPUT"))
 
-    async def run(self, *, model: str, max_turns: int, system_prompt: str,
+    async def run(self, *, model: str, effort: str | None = None,
+                  max_turns: int,
+                  system_prompt: str,
                   prompt: str, console: Console, verbose: bool) -> AgentResult:
         try:
             from openai import OpenAI
@@ -69,12 +72,15 @@ class OpenAIProvider(AgentProvider):
         input_items = [{"role": "user", "content": prompt}]
 
         for _ in range(max_turns):
-            raw = client.responses.with_raw_response.create(
-                model=model,
-                instructions=system_prompt,
-                input=input_items,
-                tools=_tools.OPENAI_TOOL_SCHEMAS,
-            )
+            request: dict[str, Any] = {
+                "model": model,
+                "instructions": system_prompt,
+                "input": input_items,
+                "tools": _tools.OPENAI_TOOL_SCHEMAS,
+            }
+            if effort is not None:
+                request["reasoning"] = {"effort": effort}
+            raw = client.responses.with_raw_response.create(**request)
             response = raw.parse()
 
             turn_cost = _header_cost(raw)
